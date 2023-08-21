@@ -147,8 +147,7 @@ def app_description():
     return html.Div(
         id='app-description',
         children=[
-            html.H2('AMQ Ranked Stats'),
-            html.H4('Only has data collected by the creator (TrueXC)')
+            html.H2('Ranked Stats'),
         ]
     )
 
@@ -233,9 +232,29 @@ def final_hist():
         cumulative=True,
         marginal='histogram'
     )
-    fig.update_traces(marker_line_width=1, marker_line_color="white")
+    fig.update_traces(marker_line_width=1, marker_line_color='white')
     return html.Div(
         id='final-hist',
+        children=[
+            dcc.Graph(figure=fig)
+        ]
+    )
+
+def date_hist():
+    fig = px.histogram(X, x='AiredDate', labels=lbs, template='plotly_white', color_discrete_sequence=['pink'], histnorm='percent')
+    fig.update_traces(marker_line_width=1, marker_line_color='white')
+    return html.Div(
+        id='date-hist',
+        children=[
+            dcc.Graph(figure=fig)
+        ]
+    )
+
+def date_violin():
+    X['Decade'] = X['AiredDate'].dt.year//10*10 
+    fig = px.violin(X, x='Decade', y='p_correctGuess', template='plotly_white', box=True, labels=lbs)
+    return html.Div(
+        id='date-violin',
         children=[
             dcc.Graph(figure=fig)
         ]
@@ -248,7 +267,9 @@ app.layout = dbc.Container(
         types_table(),
         difficulty_correct_scatter(),
         final_table(),
-        final_hist()
+        final_hist(),
+        date_hist(),
+        date_violin()
     ]
 )
 
