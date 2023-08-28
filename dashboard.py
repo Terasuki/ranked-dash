@@ -4,26 +4,43 @@ import pandas as pd
 import numpy as np
 import seaborn as sns
 import dash_bootstrap_components as dbc
+from sklearn.preprocessing import MultiLabelBinarizer
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 
 import glob
 import os
 
 # Load files
 
-path_central_novice = r'C:\Users\imnku\Documents\Data Analysis\AMQ\CentralR-N'
-all_files_central_novice = glob.glob(os.path.join(path_central_novice, "*.json"))
+path_central_novice = './CentralR-N'
+all_files_central_novice = sorted(glob.glob(os.path.join(path_central_novice, "*.json")))
 
-central_novice = pd.concat((pd.read_json(f) for f in all_files_central_novice), ignore_index=True)
+central = []
+for f in all_files_central_novice:
+    df = pd.read_json(f)
+    df['logDate'] = f[25:35]
+    df['logDate'] = pd.to_datetime(df['logDate'], format='%Y-%m-%d')
+    central.append(df)
+    
+central_novice = pd.concat(central, ignore_index=True)
+central_novice['region'] = 'Central'
 
-path_east_novice = r'C:\Users\imnku\Documents\Data Analysis\AMQ\EastR-N'
-all_files_east_novice = glob.glob(os.path.join(path_east_novice, "*.json"))
+path_east_novice = './EastR-N'
+all_files_east_novice = sorted(glob.glob(os.path.join(path_east_novice, "*.json")))
 
-east_novice = pd.concat((pd.read_json(f) for f in all_files_east_novice), ignore_index=True)
+east = []
+for f in all_files_east_novice:
+    df = pd.read_json(f)
+    df['logDate'] = f[22:32]
+    df['logDate'] = pd.to_datetime(df['logDate'], format='%Y-%m-%d')
+    east.append(df)
+    
+east_novice = pd.concat(east, ignore_index=True)
+east_novice['region'] = 'East'
 
 novice = pd.concat(([central_novice, east_novice]), ignore_index=True)
-X = novice.drop(['annId', 'urls', 'siteIds', 'animeScore', 'altAnswers', 'selfAnswer', 'fromList', 'gameMode', 'correct'], axis=1).copy()
-
-# Create data
+X = novice.drop(['annId', 'urls', 'siteIds', 'animeScore', 'selfAnswer', 'fromList', 'gameMode', 'correct'], axis=1).copy()
 
 def find_n_correct(players):
     i = 0
@@ -71,6 +88,7 @@ def find_jp(names):
         raise Exception('No jp name')
     return name
 
+X['anime_jp'] = X['anime'].apply(find_jp)
 X['avgGuessTime'] = X['players'].apply(find_gt)
 X['n_correctGuess'] = X['players'].apply(find_n_correct)
 X['n_noGuess'] = X['players'].apply(find_ng)
@@ -82,37 +100,34 @@ X['type_noNumber'] = X['type'].str.split().str[0]
 X['samplePercent'] = X['startSample']/X['videoLength']
 X['AiredDate'] = X['vintage'].replace({'Winter': '1', 'Spring': '4', 'Summer': '7', 'Fall': '10'}, regex=True)
 X['AiredDate'] = pd.to_datetime(X['AiredDate'], format='%m %Y')
-X['anime_jp'] = X['anime'].apply(find_jp)
 
-n_games = len(all_files_central_novice) + len(all_files_east_novice)
-songs_played = X.shape[0]
-guess_rate = X['p_correctGuess'].mean()
-guess_time = X['avgGuessTime'].mean()
-no_guess_rate = X['p_noGuess'].mean()
-diff = X['difficulty'].mean()
+mlb = MultiLabelBinarizer()
+s = X['tags']
+dummy = pd.DataFrame(mlb.fit_transform(s), columns=mlb.classes_, index=X.index)
+X = pd.concat([X, dummy], axis=1)
 
-op = X.loc[X['type_noNumber'] == 'Opening']
-op_played = op.shape[0]
-op_rate = op['p_correctGuess'].mean()
-op_diff = op['difficulty'].mean()
+mlb2 = MultiLabelBinarizer()
+s = X['genre']
+dummy = pd.DataFrame(mlb2.fit_transform(s), columns=mlb2.classes_, index=X.index)
+X = pd.concat([X, dummy], axis=1)
 
-ed = X.loc[X['type_noNumber'] == 'Ending']
-ed_played = ed.shape[0]
-ed_rate = ed['p_correctGuess'].mean()
-ed_diff = ed['difficulty'].mean()
+X = X.drop(['tags', 'genre'], axis=1)
 
-ins = X.loc[X['type_noNumber'] == 'Insert']
-in_played = ins.shape[0]
-in_rate = ins['p_correctGuess'].mean()
-in_diff = ins['difficulty'].mean()
+genres = X[mlb2.classes_].sum().sort_values(ascending=False)
+g_perc = pd.Series(index=mlb2.classes_, dtype='float64')
+for genre in mlb2.classes_:
+    g_perc[genre] = X.loc[X[genre] == 1]['p_correctGuess'].mean()
+genres = pd.concat([genres, g_perc], axis=1)
+genres.columns = ['Count', 'Guess rate']
+genres = genres.sort_values(by='Guess rate', ascending=False)
 
-last_song = pd.DataFrame(X.loc[X['songNumber'] == 45]).reset_index(drop=True)
-last_song['Scores'] = last_song['players'].apply(find_scores)
-
-finalScores = np.concatenate(last_song['Scores'].values).astype(int)
-end_mean = finalScores.mean()
-end_std = finalScores.std()
-end_max = finalScores.max()
+tags = X[mlb.classes_].sum().sort_values(ascending=False)
+t_perc = pd.Series(index=mlb.classes_, dtype='float64')
+for tag in mlb.classes_:
+    t_perc[tag] = X.loc[X[tag] == 1]['p_correctGuess'].mean()
+tags = pd.concat([tags, t_perc], axis=1)
+tags.columns = ['Count', 'Guess rate']
+tags = tags.sort_values(by='Count', ascending=False).head(30).sort_values(by='Guess rate', ascending=False)
 
 # Data names
 
@@ -154,45 +169,109 @@ def app_description():
 def difficulty_correct_scatter():
     return html.Div(
         id='diff-correct',
-        children=[
-            dcc.Graph(figure=px.scatter(
-        X,
-        x='difficulty',
-        y='p_correctGuess',
-        color='type_noNumber',
-        marginal_x='histogram', 
-        marginal_y='histogram',
-        hover_data=hover_dt,
-        labels=lbs,
-        trendline=None,
-        template='plotly_white',
-        range_x=[0, 100],
-        range_y=[0, 100],
-        opacity=0.5
-        ))
-        ]
     )
 
 def types_table():
     return html.Div(
         id='types-table',
-        children=dbc.Table(
-            bordered=True,
-            striped=True,
-            children=[
-                html.Thead(html.Tr(children=[html.Th(''), html.Th('Openings'), html.Th('Endings'), html.Th('Inserts')])),
-                html.Tbody([
-                    html.Tr(children=[html.Th('Songs played'), html.Td(op_played), html.Td(ed_played), html.Td(in_played)]),
-                    html.Tr(children=[html.Th('Correct guess rate'), html.Td('{:.2f}'.format(op_rate)), html.Td('{:.2f}'.format(ed_rate)), html.Td('{:.2f}'.format(in_rate))]),
-                    html.Tr(children=[html.Th('Average difficulty'), html.Td('{:.2f}'.format(op_diff)), html.Td('{:.2f}'.format(ed_diff)), html.Td('{:.2f}'.format(in_diff))])]),
-                ]
         )
-    )
 
 def generic_table():
     return html.Div(
         id='generic-table',
-        children=dbc.Table(
+    )
+
+def final_table():
+    return html.Div(
+        id='final-table',
+    )
+
+def final_hist():
+    return html.Div(
+        id='final-hist',
+    )
+
+def date_hist():
+    return html.Div(
+        id='date-hist',
+    )
+
+def date_violin():
+    return html.Div(
+        id='date-violin',
+    )
+
+def region_selector():
+    return html.Div(
+        children=[
+            dbc.RadioItems(
+                id='region-checklist',
+                options=['East', 'Central', 'Both'],
+                value='East'
+            )
+        ],
+        style={'position':'fixed'}
+    )
+
+def trend_players():
+    return html.Div(
+        id='trend-players',
+    )
+
+def trend_score():
+    return html.Div(
+        id='trend-score',
+    )
+
+@callback(
+    Output('generic-table', 'children'),
+    Output('types-table', 'children'),
+    Output('final-table', 'children'),
+    Output('final-hist', 'children'),
+    Output('trend-players', 'children'),
+    Output('trend-score', 'children'),
+    Output('date-violin', 'children'),
+    Output('date-hist', 'children'),
+    Output('diff-correct', 'children'),
+    Input('region-checklist', 'value'))
+def update_graphs(region):
+
+    if region == 'Both':
+        X_u = X
+    else:
+        X_u = X.loc[X['region'].isin([region])]
+
+    n_games = X_u.shape[0]/45
+    songs_played = X_u.shape[0]
+    guess_rate = X_u['p_correctGuess'].mean()
+    guess_time = X_u['avgGuessTime'].mean()
+    no_guess_rate = X_u['p_noGuess'].mean()
+    diff = X_u['difficulty'].mean()
+
+    op = X_u.loc[X_u['type_noNumber'] == 'Opening']
+    op_played = op.shape[0]
+    op_rate = op['p_correctGuess'].mean()
+    op_diff = op['difficulty'].mean()
+
+    ed = X_u.loc[X_u['type_noNumber'] == 'Ending']
+    ed_played = ed.shape[0]
+    ed_rate = ed['p_correctGuess'].mean()
+    ed_diff = ed['difficulty'].mean()
+
+    ins = X_u.loc[X_u['type_noNumber'] == 'Insert']
+    in_played = ins.shape[0]
+    in_rate = ins['p_correctGuess'].mean()
+    in_diff = ins['difficulty'].mean()
+
+    last_song = pd.DataFrame(X_u.loc[X['songNumber'] == 45]).reset_index(drop=True)
+    last_song['Scores'] = last_song['players'].apply(find_scores)
+
+    finalScores = np.concatenate(last_song['Scores'].values).astype(int)
+    end_mean = finalScores.mean()
+    end_std = finalScores.std()
+    end_max = finalScores.max()
+
+    generic_t = dbc.Table(
             bordered=True,
             striped=True,
             children=[
@@ -204,12 +283,18 @@ def generic_table():
                 ]))
             ]
         )
-    )
-
-def final_table():
-    return html.Div(
-        id='final-table',
-        children=dbc.Table(
+    types_t = dbc.Table(
+            bordered=True,
+            striped=True,
+            children=[
+                html.Thead(html.Tr(children=[html.Th(''), html.Th('Openings'), html.Th('Endings'), html.Th('Inserts')])),
+                html.Tbody([
+                    html.Tr(children=[html.Th('Songs played'), html.Td(op_played), html.Td(ed_played), html.Td(in_played)]),
+                    html.Tr(children=[html.Th('Correct guess rate'), html.Td('{:.2f}'.format(op_rate)), html.Td('{:.2f}'.format(ed_rate)), html.Td('{:.2f}'.format(in_rate))]),
+                    html.Tr(children=[html.Th('Average difficulty'), html.Td('{:.2f}'.format(op_diff)), html.Td('{:.2f}'.format(ed_diff)), html.Td('{:.2f}'.format(in_diff))])]),
+                ]
+            )
+    final_t = dbc.Table(
             bordered=True,
             striped=True,
             children=[
@@ -221,55 +306,98 @@ def final_table():
                 ]))
             ]
         )
+    
+    fig = make_subplots(specs=[[{"secondary_y": True}]])
+    hist_density = np.histogram(finalScores, bins=np.arange(47)-0.01, density=True)[0]*100
+    fig.add_trace(
+        go.Bar(x=np.arange(0, 46), y=hist_density, name='Final score', width=0.98),
+        secondary_y=False,
     )
-def final_hist():
-    fig = px.histogram(
-        x=finalScores,
-        labels={'x':'Final score'},
+    fig.update_traces(marker_color='rgb(158,202,225)')
+    fig.add_trace(
+        go.Scatter(x=np.arange(0, 46), y=hist_density.cumsum() ,mode='lines+markers', name='Cumulative'),
+        secondary_y=True,
+    )
+    fig.update_layout(template='plotly_white', yaxis=dict(
+            title=dict(text='Percent'),
+            side='left',
+            range=[0, 5.1],
+        ),
+        yaxis2=dict(
+            title=dict(text='Cumulative percent'),
+            side='right',
+            range=[0, 102],
+            overlaying='y',
+            tickmode='auto',
+        ),)
+    fig.update_xaxes(title_text='Final scores')
+
+    trend_players = dcc.Graph(figure=px.line(last_song, x='logDate', y='totalPlayers',
+        markers=True, 
+        color='region',
         template='plotly_white',
-        color_discrete_sequence=['lightblue'],
-        histnorm='percent',
-        cumulative=True,
-        marginal='histogram'
-    )
-    fig.update_traces(marker_line_width=1, marker_line_color='white')
-    return html.Div(
-        id='final-hist',
-        children=[
-            dcc.Graph(figure=fig)
-        ]
-    )
+        labels={'totalPlayers':'Number of players', 'logDate':'Date'}
+    ))
 
-def date_hist():
-    fig = px.histogram(X, x='AiredDate', labels=lbs, template='plotly_white', color_discrete_sequence=['pink'], histnorm='percent')
-    fig.update_traces(marker_line_width=1, marker_line_color='white')
-    return html.Div(
-        id='date-hist',
-        children=[
-            dcc.Graph(figure=fig)
-        ]
-    )
+    trend_score = dcc.Graph(figure=px.line(last_song, x='logDate', y=last_song['Scores'].apply(np.mean),
+        markers=True, 
+        color='region',
+        template='plotly_white',
+        labels={'y':'Mean score', 'logDate':'Date'}
+    ))
 
-def date_violin():
-    X['Decade'] = X['AiredDate'].dt.year//10*10 
-    fig = px.violin(X, x='Decade', y='p_correctGuess', template='plotly_white', box=True, labels=lbs)
-    return html.Div(
-        id='date-violin',
-        children=[
-            dcc.Graph(figure=fig)
-        ]
-    )
+    X_u['Decade'] = X_u['AiredDate'].dt.year//10*10 
+    decade_violin = dcc.Graph(figure=px.violin(X_u, x='Decade', y='p_correctGuess', template='plotly_white', box=True, labels=lbs))
+
+    date_hist = px.histogram(X_u, x='AiredDate', labels=lbs, template='plotly_white', color_discrete_sequence=['pink'], histnorm='percent')
+    date_hist.update_traces(marker_line_width=1, marker_line_color='white')
+
+    diff_correct = dcc.Graph(figure=px.scatter(
+        X_u,
+        x='difficulty',
+        y='p_correctGuess',
+        color='type_noNumber',
+        marginal_x='histogram', 
+        marginal_y='histogram',
+        hover_data=hover_dt,
+        labels=lbs,
+        trendline=None,
+        template='plotly_white',
+        range_x=[0, 100],
+        range_y=[0, 100],
+        opacity=0.5,
+        category_orders={
+            'type_noNumber':['Opening', 'Ending', 'Insert']
+        }
+        ))
+
+    return generic_t, types_t, final_t, dcc.Graph(figure=fig), trend_players, trend_score, decade_violin, dcc.Graph(figure=date_hist), diff_correct
 
 app.layout = dbc.Container(
     [
-        app_description(),
-        generic_table(),
-        types_table(),
-        difficulty_correct_scatter(),
-        final_table(),
-        final_hist(),
-        date_hist(),
-        date_violin()
+        html.Div(region_selector(), style={
+            'display': 'inline-block',
+            'vertical-align': 'top',
+            'z-index':'10'
+        }),
+        html.Div([
+            app_description(),
+            generic_table(),
+            types_table(),
+            difficulty_correct_scatter(),
+            final_table(),
+            final_hist(),
+            date_hist(),
+            date_violin(),
+            trend_players(),
+            trend_score()
+        ], style={
+            'display': 'inline-block',
+            'vertical-align': 'top', 
+            'width':'90%',
+            'float':'right',
+            'z-index':'0'
+        })
     ]
 )
 
