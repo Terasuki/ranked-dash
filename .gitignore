@@ -130,11 +130,12 @@ dmypy.json
 .pyre/
 
 # Data
-*.json
 *.mp3
 *.webm
 *.csv
 *.zip
+/interuni
+/comf
 
 # Outputs
 *.jpg
