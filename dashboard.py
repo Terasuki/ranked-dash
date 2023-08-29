@@ -156,6 +156,7 @@ hover_dt = {'artist':True,
 # Dashboard
 
 app = Dash(__name__, external_stylesheets=[dbc.themes.SANDSTONE])
+server = app.server
 
 def app_description():
     return html.Div(
