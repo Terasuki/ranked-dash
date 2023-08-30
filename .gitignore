@@ -134,6 +134,7 @@ dmypy.json
 *.webm
 *.csv
 *.zip
+*.json
 /interuni
 /comf
 
