@@ -4,4 +4,8 @@ pandas
 scikit-learn
 numpy
 scipy
+<<<<<<< HEAD
 gunicorn
+=======
+gunicorn
+>>>>>>> adfd67875c50800dceee1feca20de3ee8525c94c
