@@ -259,14 +259,14 @@ def update_graphs(region):
         ),)
     fig.update_xaxes(title_text='Final scores')
 
-    trend_players = dcc.Graph(figure=px.line(last_song, x='logDate', y='totalPlayers',
+    trend_players = dcc.Graph(figure=px.line(last_song_u, x='logDate', y='totalPlayers',
         markers=True, 
         color='region',
         template='plotly_white',
         labels={'totalPlayers':'Number of players', 'logDate':'Date'}
     ))
 
-    trend_score = dcc.Graph(figure=px.line(last_song, x='logDate', y=last_song['Scores'].apply(np.mean),
+    trend_score = dcc.Graph(figure=px.line(last_song_u, x='logDate', y=last_song_u['Scores'].apply(np.mean),
         markers=True, 
         color='region',
         template='plotly_white',
