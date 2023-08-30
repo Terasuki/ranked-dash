@@ -5,6 +5,7 @@ import numpy as np
 import dash_bootstrap_components as dbc
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
+from sklearn.preprocessing import MultiLabelBinarizer
 
 # Load files
 
@@ -42,6 +43,7 @@ hover_dt = {'artist':True,
 # Dashboard
 
 app = Dash(__name__, external_stylesheets=[dbc.themes.SANDSTONE])
+app.title = 'AMQ Ranked Stats'
 server = app.server
 
 def app_description():
@@ -109,6 +111,16 @@ def trend_score():
         id='trend-score',
     )
 
+def genres():
+    return html.Div(
+        id='genres',
+    )
+
+def tags():
+    return html.Div(
+        id='tags',
+    )
+
 @callback(
     Output('generic-table', 'children'),
     Output('types-table', 'children'),
@@ -119,6 +131,8 @@ def trend_score():
     Output('date-violin', 'children'),
     Output('date-hist', 'children'),
     Output('diff-correct', 'children'),
+    Output('genres', 'children'),
+    Output('tags', 'children'),
     Input('region-checklist', 'value'))
 def update_graphs(region):
 
@@ -155,6 +169,34 @@ def update_graphs(region):
     end_mean = finalScores.mean()
     end_std = finalScores.std()
     end_max = finalScores.max()
+
+    mlb = MultiLabelBinarizer()
+    s = X_u['tags']
+    dummy = pd.DataFrame(mlb.fit_transform(s), columns=mlb.classes_, index=X_u.index, dtype=np.bool_)
+    X_u = pd.concat([X_u, dummy], axis=1)
+
+    mlb2 = MultiLabelBinarizer()
+    s = X_u['genre']
+    dummy = pd.DataFrame(mlb2.fit_transform(s), columns=mlb2.classes_, index=X_u.index, dtype=np.bool_)
+    X_u = pd.concat([X_u, dummy], axis=1)
+
+    X_u = X_u.drop(['tags', 'genre'], axis=1)
+
+    genres = X_u[mlb2.classes_].sum().sort_values(ascending=False)
+    g_perc = pd.Series(index=mlb2.classes_, dtype='float64')
+    for genre in mlb2.classes_:
+        g_perc[genre] = X_u.loc[X_u[genre] == 1]['p_correctGuess'].mean()
+    genres = pd.concat([genres, g_perc], axis=1)
+    genres.columns = ['Count', 'Guess rate']
+    genres = genres.sort_values(by='Guess rate', ascending=False)
+
+    tags = X_u[mlb.classes_].sum().sort_values(ascending=False)
+    t_perc = pd.Series(index=mlb.classes_, dtype='float64')
+    for tag in mlb.classes_:
+        t_perc[tag] = X_u.loc[X_u[tag] == 1]['p_correctGuess'].mean()
+    tags = pd.concat([tags, t_perc], axis=1)
+    tags.columns = ['Count', 'Guess rate']
+    tags = tags.sort_values(by='Count', ascending=False).head(30).sort_values(by='Guess rate', ascending=False)
 
     generic_t = dbc.Table(
             bordered=True,
@@ -232,7 +274,7 @@ def update_graphs(region):
     ))
 
     X_u['Decade'] = X_u['AiredDate'].dt.year//10*10 
-    decade_violin = dcc.Graph(figure=px.violin(X_u, x='Decade', y='p_correctGuess', template='plotly_white', box=True, labels=lbs))
+    decade_violin = dcc.Graph(figure=px.violin(X_u, x='Decade', y='p_correctGuess', template='plotly_white', box=True, labels=lbs, range_y=[0, 100]))
 
     date_hist = px.histogram(X_u, x='AiredDate', labels=lbs, template='plotly_white', color_discrete_sequence=['pink'], histnorm='percent')
     date_hist.update_traces(marker_line_width=1, marker_line_color='white')
@@ -256,15 +298,66 @@ def update_graphs(region):
         },
         render_mode='webgl'
         ))
+    
+    genres_bar = make_subplots(specs=[[{"secondary_y": True}]])
 
-    return generic_t, types_t, final_t, dcc.Graph(figure=fig), trend_players, trend_score, decade_violin, dcc.Graph(figure=date_hist), diff_correct
+    genres_bar.add_trace(
+        go.Bar(x=genres['Count'].keys(), y=genres['Count']/songs_played, name='Appareance', width=0.98),
+        secondary_y=False,
+    )
+    genres_bar.update_traces(marker_color='rgb(149,237,158)')
+    genres_bar.add_trace(
+        go.Scatter(x=genres['Count'].keys(), y=genres['Guess rate'], mode='lines+markers', name='Correct'),
+        secondary_y=True,
+    )
+    genres_bar.update_traces(marker_color='rgb(78, 100, 207)', selector=dict(type='scatter'))
+    genres_bar.update_layout(template='plotly_white', yaxis=dict(
+            title=dict(text='Appereance rate'),
+            side='left',
+            range=[0, 0.6],
+        ),
+        yaxis2=dict(
+            title=dict(text='Correct percent'),
+            side='right',
+            range=[0, 60],
+            overlaying='y',
+        ),)
+    genres_bar.update_xaxes(title_text='Genres')
+
+    tags_bar = make_subplots(specs=[[{"secondary_y": True}]])
+
+    tags_bar.add_trace(
+        go.Bar(x=tags['Count'].keys(), y=tags['Count']/songs_played, name='Appareance', width=0.98),
+        secondary_y=False,
+    )
+    tags_bar.update_traces(marker_color='rgb(149,237,158)')
+    tags_bar.add_trace(
+        go.Scatter(x=tags['Count'].keys(), y=tags['Guess rate'], mode='lines+markers', name='Correct'),
+        secondary_y=True,
+    )
+    tags_bar.update_traces(marker_color='rgb(78, 100, 207)', selector=dict(type='scatter'))
+    tags_bar.update_layout(template='plotly_white', yaxis=dict(
+            title=dict(text='Appereance rate'),
+            side='left',
+            range=[0, 0.6],
+        ),
+        yaxis2=dict(
+            title=dict(text='Correct percent'),
+            side='right',
+            range=[0, 60],
+            overlaying='y',
+        ),)
+    tags_bar.update_xaxes(title_text='Tags')
+
+    return generic_t, types_t, final_t, dcc.Graph(figure=fig), trend_players, trend_score, decade_violin, dcc.Graph(figure=date_hist), diff_correct, dcc.Graph(figure=genres_bar), dcc.Graph(figure=tags_bar)
 
 app.layout = dbc.Container(
     [
         html.Div(region_selector(), style={
             'display': 'inline-block',
             'vertical-align': 'top',
-            'z-index':'10'
+            'z-index':'10',
+            'margin-top':'10px'
         }),
         html.Div([
             app_description(),
@@ -275,6 +368,8 @@ app.layout = dbc.Container(
             final_hist(),
             date_hist(),
             date_violin(),
+            genres(),
+            tags(),
             trend_players(),
             trend_score()
         ], style={
@@ -282,7 +377,8 @@ app.layout = dbc.Container(
             'vertical-align': 'top', 
             'width':'90%',
             'float':'right',
-            'z-index':'0'
+            'z-index':'0',
+            'margin-top':'10px'
         })
     ]
 )
