@@ -6,6 +6,7 @@ import dash_bootstrap_components as dbc
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from sklearn.preprocessing import MultiLabelBinarizer
+from datetime import date
 
 # Load files
 
@@ -51,6 +52,14 @@ def app_description():
         id='app-description',
         children=[
             html.H2('Ranked Stats'),
+        ]
+    )
+
+def footnote():
+    return html.Div(
+        id='footnote',
+        children=[
+            html.H5('Author: Terasuki. Using a free instance, so expect slow dashboard updates.')
         ]
     )
 
@@ -121,6 +130,18 @@ def tags():
         id='tags',
     )
 
+def date_picker():
+    return html.Div(
+        children=[dcc.DatePickerRange(
+            id='date-picker',
+            start_date=date(2023, 2, 12),
+            end_date=date(2023, 12, 31),
+            min_date_allowed=date(2023, 2, 12),
+            first_day_of_week=1,
+            number_of_months_shown=3
+        )]
+    )
+
 @callback(
     Output('generic-table', 'children'),
     Output('types-table', 'children'),
@@ -133,8 +154,10 @@ def tags():
     Output('diff-correct', 'children'),
     Output('genres', 'children'),
     Output('tags', 'children'),
-    Input('region-checklist', 'value'))
-def update_graphs(region):
+    Input('region-checklist', 'value'),
+    Input('date-picker', 'start_date'),
+    Input('date-picker', 'end_date'))
+def update_graphs(region, start_dt, end_dt):
 
     if region == 'Both':
         X_u = X
@@ -142,6 +165,9 @@ def update_graphs(region):
     else:
         X_u = X.loc[X['region'].isin([region])]
         last_song_u = last_song.loc[last_song['region'].isin([region])]
+
+    X_u = X_u[(X_u['logDate'] >= pd.Timestamp(date.fromisoformat(start_dt))) & (X_u['logDate'] <= pd.Timestamp(date.fromisoformat(end_dt)))]
+    last_song_u = last_song_u[(last_song_u['logDate'] >= pd.Timestamp(date.fromisoformat(start_dt))) & (last_song_u['logDate'] <= pd.Timestamp(date.fromisoformat(end_dt)))]
 
     n_games = X_u.shape[0]/45
     songs_played = X_u.shape[0]
@@ -353,7 +379,7 @@ def update_graphs(region):
 
 app.layout = dbc.Container(
     [
-        html.Div(region_selector(), style={
+        html.Div(children=[region_selector()], style={
             'display': 'inline-block',
             'vertical-align': 'top',
             'z-index':'10',
@@ -361,6 +387,7 @@ app.layout = dbc.Container(
         }),
         html.Div([
             app_description(),
+            date_picker(),
             generic_table(),
             types_table(),
             difficulty_correct_scatter(),
@@ -371,7 +398,8 @@ app.layout = dbc.Container(
             genres(),
             tags(),
             trend_players(),
-            trend_score()
+            trend_score(),
+            footnote()
         ], style={
             'display': 'inline-block',
             'vertical-align': 'top', 
