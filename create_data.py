@@ -4,6 +4,8 @@ import glob
 import os
 
 def load_data():
+
+    # Novice
     path_central_novice = './CentralR-N'
     all_files_central_novice = sorted(glob.glob(os.path.join(path_central_novice, "*.json")))
 
@@ -31,7 +33,43 @@ def load_data():
     east_novice['region'] = 'East'
 
     novice = pd.concat(([central_novice, east_novice]), ignore_index=True)
-    X = novice.drop(['annId', 'urls', 'siteIds', 'animeScore', 'selfAnswer', 'fromList', 'gameMode', 'correct'], axis=1)
+    novice['rankedMode'] = 'Novice'
+
+    # Expert
+    path_central_expert = './CentralR-E'
+    all_files_central_expert = sorted(glob.glob(os.path.join(path_central_expert, "*.json")))
+
+    central = []
+    for f in all_files_central_expert:
+        df = pd.read_json(f)
+        df['logDate'] = f[25:35]
+        df['logDate'] = pd.to_datetime(df['logDate'], format='%Y-%m-%d')
+        central.append(df)
+        
+    central_expert = pd.concat(central, ignore_index=True)
+    central_expert['region'] = 'Central'
+
+    path_east_expert = './EastR-E'
+    all_files_east_expert = sorted(glob.glob(os.path.join(path_east_expert, "*.json")))
+
+    east = []
+    for f in all_files_east_expert:
+        df = pd.read_json(f)
+        df['logDate'] = f[22:32]
+        df['logDate'] = pd.to_datetime(df['logDate'], format='%Y-%m-%d')
+        east.append(df)
+        
+    east_expert = pd.concat(east, ignore_index=True)
+    east_expert['region'] = 'East'
+
+    expert = pd.concat(([central_expert, east_expert]), ignore_index=True)
+    expert['rankedMode'] = 'Expert'
+
+    expert = expert.replace('Unrated', 0)
+    expert = expert.astype({'difficulty': 'float'})
+
+    X = pd.concat(([novice, expert]), ignore_index=True)
+    X = X.drop(['annId', 'urls', 'siteIds', 'animeScore', 'selfAnswer', 'fromList', 'gameMode', 'correct'], axis=1)
     return X
 
 def find_n_correct(players):
@@ -88,7 +126,7 @@ def create_features(X):
     return X
 
 def create_last(X):
-    last_song = pd.DataFrame(X.loc[X['songNumber'] == 45]).reset_index(drop=True)
+    last_song = pd.DataFrame(X.loc[((X['songNumber'] == 45) & (X['rankedMode'] == 'Novice')) | (X['songNumber'] == 85)]).reset_index(drop=True)
     last_song['Scores'] = last_song['players'].apply(find_scores)
     return last_song
     

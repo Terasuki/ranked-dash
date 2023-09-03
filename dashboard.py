@@ -110,6 +110,19 @@ def region_selector():
         style={'position':'fixed'}
     )
 
+def mode_selector():
+    return html.Div(
+        children=[
+            dbc.RadioItems(
+                id='mode-checklist',
+                options=['Novice', 'Expert'],
+                value='Novice'
+            )
+        ],
+        style={'position':'fixed',
+               'top':'200px'}
+    )
+
 def trend_players():
     return html.Div(
         id='trend-players',
@@ -139,7 +152,8 @@ def date_picker():
             min_date_allowed=date(2023, 2, 12),
             first_day_of_week=1,
             number_of_months_shown=3
-        )]
+        )],
+        style={'margin-bottom':'20px'}
     )
 
 @callback(
@@ -156,8 +170,9 @@ def date_picker():
     Output('tags', 'children'),
     Input('region-checklist', 'value'),
     Input('date-picker', 'start_date'),
-    Input('date-picker', 'end_date'))
-def update_graphs(region, start_dt, end_dt):
+    Input('date-picker', 'end_date'),
+    Input('mode-checklist', 'value'))
+def update_graphs(region, start_dt, end_dt, mode):
 
     if region == 'Both':
         X_u = X
@@ -166,10 +181,13 @@ def update_graphs(region, start_dt, end_dt):
         X_u = X.loc[X['region'].isin([region])]
         last_song_u = last_song.loc[last_song['region'].isin([region])]
 
+    X_u = X_u.loc[X_u['rankedMode'].isin([mode])]
+    last_song_u = last_song_u.loc[last_song_u['rankedMode'].isin([mode])]
+
     X_u = X_u[(X_u['logDate'] >= pd.Timestamp(date.fromisoformat(start_dt))) & (X_u['logDate'] <= pd.Timestamp(date.fromisoformat(end_dt)))]
     last_song_u = last_song_u[(last_song_u['logDate'] >= pd.Timestamp(date.fromisoformat(start_dt))) & (last_song_u['logDate'] <= pd.Timestamp(date.fromisoformat(end_dt)))]
 
-    n_games = X_u.shape[0]/45
+    n_games = last_song_u.shape[0]
     songs_played = X_u.shape[0]
     guess_rate = X_u['p_correctGuess'].mean()
     guess_time = X_u['avgGuessTime'].mean()
@@ -260,15 +278,20 @@ def update_graphs(region, start_dt, end_dt):
             ]
         )
     
+    if mode == 'Expert':
+        number_of_songs = 85
+    else:
+        number_of_songs = 45
+    
     fig = make_subplots(specs=[[{"secondary_y": True}]])
-    hist_density = np.histogram(finalScores, bins=np.arange(47)-0.01, density=True)[0]*100
+    hist_density = np.histogram(finalScores, bins=np.arange(number_of_songs+2)-0.01, density=True)[0]*100
     fig.add_trace(
-        go.Bar(x=np.arange(0, 46), y=hist_density, name='Final score', width=0.98),
+        go.Bar(x=np.arange(0, number_of_songs+1), y=hist_density, name='Final score', width=0.98),
         secondary_y=False,
     )
     fig.update_traces(marker_color='rgb(158,202,225)')
     fig.add_trace(
-        go.Scatter(x=np.arange(0, 46), y=hist_density.cumsum() ,mode='lines+markers', name='Cumulative'),
+        go.Scatter(x=np.arange(0, number_of_songs+1), y=hist_density.cumsum() ,mode='lines+markers', name='Cumulative'),
         secondary_y=True,
     )
     fig.update_layout(template='plotly_white', yaxis=dict(
@@ -379,7 +402,7 @@ def update_graphs(region, start_dt, end_dt):
 
 app.layout = dbc.Container(
     [
-        html.Div(children=[region_selector()], style={
+        html.Div(children=[region_selector(), mode_selector()], style={
             'display': 'inline-block',
             'vertical-align': 'top',
             'z-index':'10',
