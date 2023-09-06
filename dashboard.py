@@ -12,6 +12,7 @@ from datetime import date
 
 X = pd.read_parquet('./data.parquet')
 last_song = pd.read_parquet('./last.parquet')
+#players_all = pd.read_parquet('./players.parquet')
 
 def find_scores(players):
     scores = np.zeros(len(players))

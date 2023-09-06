@@ -135,8 +135,7 @@ dmypy.json
 *.csv
 *.zip
 *.json
-/interuni
-/comf
+
 
 # Outputs
 *.jpg
