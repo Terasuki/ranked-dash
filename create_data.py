@@ -110,6 +110,14 @@ def find_jp(names):
         raise Exception('No jp name')
     return name
 
+def add_index(players, index):
+    for player in players:
+        player['songIndex'] = index
+    return players
+
+def flatten(l):
+    return [item for sublist in l for item in sublist]
+
 def create_features(X):
     X['anime_jp'] = X['anime'].apply(find_jp)
     X['avgGuessTime'] = X['players'].apply(find_gt)
@@ -121,7 +129,7 @@ def create_features(X):
     X['samplePercent'] = X['startSample']/X['videoLength']
     X['AiredDate'] = X['vintage'].replace({'Winter': '1', 'Spring': '4', 'Summer': '7', 'Fall': '10'}, regex=True)
     X['AiredDate'] = pd.to_datetime(X['AiredDate'], format='%m %Y')
-    X = X.drop(['players', 'altAnswers', 'startSample', 'videoLength', 'vintage', 'type'], axis=1)
+    X = X.drop(['players', 'altAnswers', 'startSample', 'videoLength', 'vintage', 'type', 'songIndex', 'players_id', 'n_correctGuess', 'n_noGuess', 'anime'], axis=1)
 
     return X
 
@@ -129,11 +137,25 @@ def create_last(X):
     last_song = pd.DataFrame(X.loc[((X['songNumber'] == 45) & (X['rankedMode'] == 'Novice')) | (X['songNumber'] == 85)]).reset_index(drop=True)
     last_song['Scores'] = last_song['players'].apply(find_scores)
     return last_song
+
+def create_players(X):
+    X['songIndex'] = np.arange(X.shape[0])
+    X['players_id'] = X.apply(lambda x: add_index(x['players'], x['songIndex']), axis=1)
+    players = pd.DataFrame(flatten(X['players_id'].to_list()))
+    players = players.loc[players['active'] == True]
+    players = players.drop(['answer','correctGuesses', 'active', 'positionSlot'], axis=1).astype({'score':np.uint8,
+                                                                                 'position':np.uint16,
+                                                                                 'songIndex':np.uint32,
+                                                                                 'guessTime':np.float32}).set_index('songIndex')
+
+    return players
     
 if __name__ == '__main__':
     X = load_data()
     Y = create_last(X)
+    Z = create_players(X)
     
     X = create_features(X)
-    X.to_parquet('data.parquet')
-    Y.to_parquet('last.parquet')
+    X.to_parquet('./data/data.parquet')
+    Y.to_parquet('./data/last.parquet')
+    Z.to_parquet('./dataplayers.parquet')
