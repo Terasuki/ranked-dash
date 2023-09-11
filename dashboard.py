@@ -206,8 +206,8 @@ def update_graphs(region, start_dt, end_dt, mode, username):
 
     players_s = players_all.loc[players_all['name'] == username].drop('name', axis=1)
     if not players_s.empty:
-        X_u = X.join(players_s).dropna(subset='score')
-        last_song_u = last_song.join(players_s).dropna(subset='score')
+        X_u = X.join(players_s).dropna(subset=['score'])
+        last_song_u = last_song.join(players_s).dropna(subset=['score'])
     else:
         X_u = X
         last_song_u = last_song
