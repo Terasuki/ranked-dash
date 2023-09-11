@@ -134,7 +134,7 @@ def create_features(X):
     return X
 
 def create_last(X):
-    last_song = pd.DataFrame(X.loc[((X['songNumber'] == 45) & (X['rankedMode'] == 'Novice')) | (X['songNumber'] == 85)]).reset_index(drop=True)
+    last_song = pd.DataFrame(X.loc[((X['songNumber'] == 45) & (X['rankedMode'] == 'Novice')) | (X['songNumber'] == 85)])
     last_song['Scores'] = last_song['players'].apply(find_scores)
     return last_song
 
@@ -142,7 +142,7 @@ def create_players(X):
     X['songIndex'] = np.arange(X.shape[0])
     X['players_id'] = X.apply(lambda x: add_index(x['players'], x['songIndex']), axis=1)
     players = pd.DataFrame(flatten(X['players_id'].to_list()))
-    players = players.loc[players['active'] == True]
+    players = players.loc[(players['active'] == True) | (players['guessTime'].notna())]
     players = players.drop(['answer','correctGuesses', 'active', 'positionSlot'], axis=1).astype({'score':np.uint8,
                                                                                  'position':np.uint16,
                                                                                  'songIndex':np.uint32,
@@ -158,4 +158,4 @@ if __name__ == '__main__':
     X = create_features(X)
     X.to_parquet('./data/data.parquet')
     Y.to_parquet('./data/last.parquet')
-    Z.to_parquet('./dataplayers.parquet')
+    Z.to_parquet('./data/players.parquet')

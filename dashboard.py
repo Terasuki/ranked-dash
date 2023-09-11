@@ -30,7 +30,9 @@ lbs = {'difficulty':'Difficulty',
       'anime_jp':'Anime',
       'avgGuessTime':'Average guess time',
       'AiredDate': 'Aired date',
-      'type_noNumber':'Song type'}
+      'type_noNumber':'Song type',
+      'guessTime':'Player guess time',
+      'correct':'Player correct'}
 
 hover_dt = {'artist':True,
            'name':True,
@@ -40,6 +42,17 @@ hover_dt = {'artist':True,
            'p_noGuess':':.1f',
            'p_correctGuess':':.1f',
            'avgGuessTime':':.1f',
+        }
+
+hover_dt_p = {'artist':True,
+           'name':True,
+           'anime_jp':True,
+           'avgGuessTime':True,
+           'difficulty':':.1f',
+           'p_noGuess':':.1f',
+           'p_correctGuess':':.1f',
+           'avgGuessTime':':.1f',
+           'guessTime':':.1f'
         }
 
 # Dashboard
@@ -157,6 +170,20 @@ def date_picker():
         style={'margin-bottom':'20px'}
     )
 
+def player_picker():
+    return html.Div(
+        children=[dbc.Input(
+            id='player-picker',
+            placeholder='Insert username'
+        )],
+        style={'margin-bottom':'20px'}
+    )
+
+def hist_personal():
+    return html.Div(
+        id='hist-personal'
+    )
+
 @callback(
     Output('generic-table', 'children'),
     Output('types-table', 'children'),
@@ -169,18 +196,30 @@ def date_picker():
     Output('diff-correct', 'children'),
     Output('genres', 'children'),
     Output('tags', 'children'),
+    Output('hist-personal', 'children'),
     Input('region-checklist', 'value'),
     Input('date-picker', 'start_date'),
     Input('date-picker', 'end_date'),
-    Input('mode-checklist', 'value'))
-def update_graphs(region, start_dt, end_dt, mode):
+    Input('mode-checklist', 'value'),
+    Input('player-picker', 'value'))
+def update_graphs(region, start_dt, end_dt, mode, username):
 
-    if region == 'Both':
+    players_s = players_all.loc[players_all['name'] == username].drop('name', axis=1)
+    if not players_s.empty:
+        X_u = X.join(players_s).dropna(subset='score')
+        last_song_u = last_song.join(players_s).dropna(subset='score')
+    else:
         X_u = X
         last_song_u = last_song
+    if last_song_u.empty:
+            last_song_u = last_song
+
+    if region == 'Both':
+        X_u = X_u
+        last_song_u = last_song_u
     else:
-        X_u = X.loc[X['region'].isin([region])]
-        last_song_u = last_song.loc[last_song['region'].isin([region])]
+        X_u = X_u.loc[X['region'].isin([region])]
+        last_song_u = last_song_u.loc[last_song_u['region'].isin([region])]
 
     X_u = X_u.loc[X_u['rankedMode'].isin([mode])]
     last_song_u = last_song_u.loc[last_song_u['rankedMode'].isin([mode])]
@@ -210,10 +249,26 @@ def update_graphs(region, start_dt, end_dt, mode):
     in_rate = ins['p_correctGuess'].mean()
     in_diff = ins['difficulty'].mean()
 
+    if last_song_u.empty:
+            last_song_u['Scores'] = [[0,1]]
+            print('No last songs recorded')
     finalScores = np.concatenate(last_song_u['Scores'].values).astype(int)
     end_mean = finalScores.mean()
     end_std = finalScores.std()
     end_max = finalScores.max()
+
+    # Player specific
+    guess_p, op_p, ed_p, in_p, gt_p, ng_p, end_p_mean, end_p_std, end_p_max = [0]*9
+    if not players_s.empty:
+        guess_p = X_u['correct'].sum()/songs_played * 100
+        op_p = op['correct'].sum()/op_played*100
+        ed_p = ed['correct'].sum()/ed_played*100
+        in_p = ins['correct'].sum()/in_played*100
+        gt_p = X_u['guessTime'].mean()
+        ng_p = X_u['guessTime'].isna().sum()/songs_played*100
+        end_p_mean = last_song_u['score'].mean()
+        end_p_std = last_song_u['score'].std()
+        end_p_max = int(last_song_u['score'].max())
 
     mlb = MultiLabelBinarizer()
     s = X_u['tags']
@@ -251,7 +306,7 @@ def update_graphs(region, start_dt, end_dt, mode):
                     html.Th('Games recorded'), html.Th('Songs recorded'), html.Th('Correct guess rate'), html.Th('Average difficulty'), html.Th('Average guess time'), html.Th('No guess rate')
                     ])),
                 html.Tbody(html.Tr([
-                    html.Td(n_games), html.Td(songs_played), html.Td('{:.2f}'.format(guess_rate)), html.Td('{:.2f}'.format(diff)), html.Td('{:.2f}'.format(guess_time)), html.Td('{:.2f}'.format(no_guess_rate))
+                    html.Td(n_games), html.Td(songs_played), html.Td('{:.2f} ({:.2f})'.format(guess_rate, guess_p)), html.Td('{:.2f}'.format(diff)), html.Td('{:.2f} ({:.2f})'.format(guess_time, gt_p)), html.Td('{:.2f} ({:.2f})'.format(no_guess_rate, ng_p))
                 ]))
             ]
         )
@@ -262,7 +317,7 @@ def update_graphs(region, start_dt, end_dt, mode):
                 html.Thead(html.Tr(children=[html.Th(''), html.Th('Openings'), html.Th('Endings'), html.Th('Inserts')])),
                 html.Tbody([
                     html.Tr(children=[html.Th('Songs played'), html.Td(op_played), html.Td(ed_played), html.Td(in_played)]),
-                    html.Tr(children=[html.Th('Correct guess rate'), html.Td('{:.2f}'.format(op_rate)), html.Td('{:.2f}'.format(ed_rate)), html.Td('{:.2f}'.format(in_rate))]),
+                    html.Tr(children=[html.Th('Correct guess rate'), html.Td('{:.2f} ({:.2f})'.format(op_rate, op_p)), html.Td('{:.2f} ({:.2f})'.format(ed_rate, ed_p)), html.Td('{:.2f} ({:.2f})'.format(in_rate, in_p))]),
                     html.Tr(children=[html.Th('Average difficulty'), html.Td('{:.2f}'.format(op_diff)), html.Td('{:.2f}'.format(ed_diff)), html.Td('{:.2f}'.format(in_diff))])]),
                 ]
             )
@@ -274,7 +329,7 @@ def update_graphs(region, start_dt, end_dt, mode):
                     html.Th(''), html.Th('Mean'), html.Th('Standard deviation'), html.Th('Highest')
                 ])),
                 html.Tbody(html.Tr([
-                    html.Th('Final score'), html.Td('{:.2f}'.format(end_mean)), html.Td('{:.2f}'.format(end_std)), html.Td(end_max)
+                    html.Th('Final score'), html.Td('{:.2f} ({:.2f})'.format(end_mean, end_p_mean)), html.Td('{:.2f} ({:.2f})'.format(end_std, end_p_std)), html.Td(f'{end_max} ({end_p_max})')
                 ]))
             ]
         )
@@ -308,6 +363,33 @@ def update_graphs(region, start_dt, end_dt, mode):
             tickmode='auto',
         ),)
     fig.update_xaxes(title_text='Final scores')
+    hist_pers = dcc.Markdown('')
+    if (not last_song_u.empty) and (not players_s.empty):
+        hist_p = make_subplots(specs=[[{'secondary_y': True}]])
+        hist_temp = np.histogram(last_song_u['score'], bins=np.arange(number_of_songs+2)-0.01, density=True)[0]*100
+        hist_p.add_trace(
+            go.Bar(x=np.arange(0, number_of_songs+1), y=hist_temp, name=f'{username} - Final score', width=0.98),
+            secondary_y=False
+        )
+        hist_p.update_traces(marker_color='rgb(204,204,255)')
+        hist_p.add_trace(
+            go.Scatter(x=np.arange(0, number_of_songs+1), y=hist_temp.cumsum() ,mode='lines+markers', name='Cumulative'),
+            secondary_y=True,
+        )
+        hist_p.update_layout(template='plotly_white', yaxis=dict(
+            title=dict(text='Percent'),
+            side='left',
+            range=[0, 51],
+        ),
+        yaxis2=dict(
+            title=dict(text='Cumulative percent'),
+            side='right',
+            range=[0, 102],
+            overlaying='y',
+            tickmode='auto',
+        ),)
+        hist_p.update_xaxes(title_text='Final scores')
+        hist_pers = dcc.Graph(figure=hist_p)
 
     trend_players = dcc.Graph(figure=px.line(last_song_u, x='logDate', y='totalPlayers',
         markers=True, 
@@ -316,38 +398,68 @@ def update_graphs(region, start_dt, end_dt, mode):
         labels={'totalPlayers':'Number of players', 'logDate':'Date'}
     ))
 
-    trend_score = dcc.Graph(figure=px.line(last_song_u, x='logDate', y=last_song_u['Scores'].apply(np.mean),
+    score_fig = px.line(last_song_u, x='logDate', y=last_song_u['Scores'].apply(np.mean),
         markers=True, 
         color='region',
         template='plotly_white',
         labels={'y':'Mean score', 'logDate':'Date'}
-    ))
+    )
+    if (not last_song_u.empty) and (not players_s.empty):
+        if region == 'Both':
+            score_fig.add_trace(
+                go.Scatter(x=last_song_u.loc[last_song_u['region'] == 'East']['logDate'], y=last_song_u['score'], mode='lines+markers', name=f'{username} - East')
+            )
+            score_fig.add_trace(
+                go.Scatter(x=last_song_u.loc[last_song_u['region'] == 'Central']['logDate'], y=last_song_u['score'], mode='lines+markers', name=f'{username} - Central')
+            )
+        else: 
+            score_fig.add_trace(
+                go.Scatter(x=last_song_u['logDate'], y=last_song_u['score'], mode='lines+markers', name=username)
+            )
+    trend_score = dcc.Graph(figure=score_fig)
 
     X_u['Decade'] = X_u['AiredDate'].dt.year//10*10 
-    decade_violin = dcc.Graph(figure=px.violin(X_u, x='Decade', y='p_correctGuess', template='plotly_white', box=True, labels=lbs, range_y=[0, 100]))
-
+    violin_graph = px.violin(X_u, x='Decade', y='p_correctGuess', template='plotly_white', box=True, labels=lbs, range_y=[0, 100])
+    if not players_s.empty:
+        decade_p = X_u.groupby('Decade')['correct'].mean()*100
+        violin_graph.add_trace(
+            go.Scatter(x=decade_p.keys(), y=decade_p, mode='lines+markers', name=username)
+        )
+    decade_violin = dcc.Graph(figure=violin_graph)
     date_hist = px.histogram(X_u, x='AiredDate', labels=lbs, template='plotly_white', color_discrete_sequence=['pink'], histnorm='percent')
+
+    if not players_s.empty:
+        date_hist = px.histogram(X_u, x='AiredDate', labels=lbs, template='plotly_white', color_discrete_sequence=['pink', 'purple'],
+                                  histnorm='percent', color='correct', category_orders={'correct':[True, False]})
+
     date_hist.update_traces(marker_line_width=1, marker_line_color='white')
 
-    diff_correct = dcc.Graph(figure=px.scatter(
-        X_u,
-        x='difficulty',
-        y='p_correctGuess',
-        color='type_noNumber',
-        marginal_x='histogram', 
-        marginal_y='histogram',
-        hover_data=hover_dt,
-        labels=lbs,
-        trendline=None,
-        template='plotly_white',
-        range_x=[0, 100],
-        range_y=[0, 100],
-        opacity=0.5,
-        category_orders={
-            'type_noNumber':['Opening', 'Ending', 'Insert']
-        },
-        render_mode='webgl'
-        ))
+    if players_s.empty:
+        d_c = px.scatter(
+            X_u,
+            x='difficulty',
+            y='p_correctGuess',
+            color='type_noNumber',
+            marginal_x='histogram', 
+            marginal_y='histogram',
+            hover_data=hover_dt,
+            labels=lbs,
+            trendline=None,
+            template='plotly_white',
+            range_x=[0, 100],
+            range_y=[0, 100],
+            opacity=0.5,
+            category_orders={
+                'type_noNumber':['Opening', 'Ending', 'Insert']
+            },
+            render_mode='webgl'
+        )
+    else:
+        d_c = px.scatter(X_u, x='difficulty', y='p_correctGuess', color='type_noNumber',
+                         marginal_x='histogram', marginal_y='histogram', hover_data=hover_dt_p, labels=lbs, template='plotly_white', range_x=[0, 100],
+                         range_y=[0, 100], opacity=0.5, category_orders={'type_noNumber':['Opening', 'Ending', 'Insert']}, render_mode='webgl',
+                         symbol='correct')
+    diff_correct = dcc.Graph(figure=d_c)
     
     genres_bar = make_subplots(specs=[[{"secondary_y": True}]])
 
@@ -364,15 +476,22 @@ def update_graphs(region, start_dt, end_dt, mode):
     genres_bar.update_layout(template='plotly_white', yaxis=dict(
             title=dict(text='Appereance rate'),
             side='left',
-            range=[0, 0.6],
+            range=[0, 1],
         ),
         yaxis2=dict(
             title=dict(text='Correct percent'),
             side='right',
-            range=[0, 60],
+            range=[0, 100],
             overlaying='y',
         ),)
     genres_bar.update_xaxes(title_text='Genres')
+
+    if not players_s.empty:
+        g_perc_p = (X_u.loc[X_u['correct'] == True][mlb2.classes_]).sum()/genres['Count'] * 100
+        genres_bar.add_trace(
+            go.Scatter(x=genres['Count'].keys(), y=g_perc_p.reindex(genres['Count'].keys()), mode='lines+markers', name=username),
+            secondary_y=True
+        )
 
     tags_bar = make_subplots(specs=[[{"secondary_y": True}]])
 
@@ -389,17 +508,24 @@ def update_graphs(region, start_dt, end_dt, mode):
     tags_bar.update_layout(template='plotly_white', yaxis=dict(
             title=dict(text='Appereance rate'),
             side='left',
-            range=[0, 0.6],
+            range=[0, 1],
         ),
         yaxis2=dict(
             title=dict(text='Correct percent'),
             side='right',
-            range=[0, 60],
+            range=[0, 100],
             overlaying='y',
         ),)
     tags_bar.update_xaxes(title_text='Tags')
 
-    return generic_t, types_t, final_t, dcc.Graph(figure=fig), trend_players, trend_score, decade_violin, dcc.Graph(figure=date_hist), diff_correct, dcc.Graph(figure=genres_bar), dcc.Graph(figure=tags_bar)
+    if not players_s.empty:
+        t_perc_p = (X_u.loc[X_u['correct'] == True][tags['Count'].keys()]).sum()/tags['Count'] * 100
+        tags_bar.add_trace(
+            go.Scatter(x=tags['Count'].keys(), y=t_perc_p.reindex(tags['Count'].keys()), mode='lines+markers', name=username),
+            secondary_y=True
+        )
+
+    return generic_t, types_t, final_t, dcc.Graph(figure=fig), trend_players, trend_score, decade_violin, dcc.Graph(figure=date_hist), diff_correct, dcc.Graph(figure=genres_bar), dcc.Graph(figure=tags_bar), hist_pers
 
 app.layout = dbc.Container(
     [
@@ -412,11 +538,13 @@ app.layout = dbc.Container(
         html.Div([
             app_description(),
             date_picker(),
+            player_picker(),
             generic_table(),
             types_table(),
             difficulty_correct_scatter(),
             final_table(),
             final_hist(),
+            hist_personal(),
             date_hist(),
             date_violin(),
             genres(),
