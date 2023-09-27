@@ -140,3 +140,6 @@ dmypy.json
 # Outputs
 *.jpg
 *.png
+
+# Hidden files
+h_*
