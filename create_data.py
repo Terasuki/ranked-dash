@@ -143,8 +143,8 @@ def create_players(X):
     X['players_id'] = X.apply(lambda x: add_index(x['players'], x['songIndex']), axis=1)
     players = pd.DataFrame(flatten(X['players_id'].to_list()))
     players = players.loc[(players['active'] == True) | (players['guessTime'].notna())]
-    players = players.drop(['answer','correctGuesses', 'active', 'positionSlot'], axis=1).astype({'score':np.uint8,
-                                                                                 'position':np.uint16,
+    players = players.drop(['answer','correctGuesses', 'active', 'position'], axis=1).astype({'score':np.uint8,
+                                                                                 'positionSlot':np.uint16,
                                                                                  'songIndex':np.uint32,
                                                                                  'guessTime':np.float32}).set_index('songIndex')
 
