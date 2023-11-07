@@ -7,6 +7,7 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from sklearn.preprocessing import MultiLabelBinarizer
 from datetime import date
+from dash_bootstrap_templates import load_figure_template
 
 # Load files
 
@@ -57,15 +58,16 @@ hover_dt_p = {'artist':True,
 
 # Dashboard
 
-app = Dash(__name__, external_stylesheets=[dbc.themes.SANDSTONE])
+app = Dash(__name__, external_stylesheets=[dbc.themes.LUMEN])
 app.title = 'AMQ Ranked Stats'
 server = app.server
+load_figure_template('LUMEN')
 
 def app_description():
     return html.Div(
         id='app-description',
         children=[
-            html.H2('Ranked Stats'),
+            html.H2('Ranked Statistics'),
         ]
     )
 
@@ -73,7 +75,7 @@ def footnote():
     return html.Div(
         id='footnote',
         children=[
-            html.H5('Author: Terasuki. Using a free instance, so expect slow dashboard updates.')
+            html.P('Made by Terasuki. Using a free instance, so expect slow dashboard updates.')
         ]
     )
 
@@ -121,7 +123,7 @@ def region_selector():
                 value='East'
             )
         ],
-        style={'position':'fixed'}
+        style={'margin-left':'3%'}
     )
 
 def mode_selector():
@@ -133,8 +135,7 @@ def mode_selector():
                 value='Novice'
             )
         ],
-        style={'position':'fixed',
-               'top':'200px'}
+        style={'margin-left':'3%'}
     )
 
 def trend_players():
@@ -167,7 +168,7 @@ def date_picker():
             first_day_of_week=1,
             number_of_months_shown=3
         )],
-        style={'margin-bottom':'20px'}
+        style={'margin-left':'3%'}
     )
 
 def player_picker():
@@ -176,7 +177,8 @@ def player_picker():
             id='player-picker',
             placeholder='Insert username'
         )],
-        style={'margin-bottom':'20px'}
+        style={'margin-left':'3%',
+               'margin-right':'3%'}
     )
 
 def hist_personal():
@@ -350,7 +352,7 @@ def update_graphs(region, start_dt, end_dt, mode, username):
         go.Scatter(x=np.arange(0, number_of_songs+1), y=hist_density.cumsum() ,mode='lines+markers', name='Cumulative'),
         secondary_y=True,
     )
-    fig.update_layout(template='plotly_white', yaxis=dict(
+    fig.update_layout(yaxis=dict(
             title=dict(text='Percent'),
             side='left',
             range=[0, 5.1],
@@ -376,7 +378,7 @@ def update_graphs(region, start_dt, end_dt, mode, username):
             go.Scatter(x=np.arange(0, number_of_songs+1), y=hist_temp.cumsum() ,mode='lines+markers', name='Cumulative'),
             secondary_y=True,
         )
-        hist_p.update_layout(template='plotly_white', yaxis=dict(
+        hist_p.update_layout(yaxis=dict(
             title=dict(text='Percent'),
             side='left',
             range=[0, 51],
@@ -394,14 +396,12 @@ def update_graphs(region, start_dt, end_dt, mode, username):
     trend_players = dcc.Graph(figure=px.line(last_song_u, x='logDate', y='totalPlayers',
         markers=True, 
         color='region',
-        template='plotly_white',
         labels={'totalPlayers':'Number of players', 'logDate':'Date'}
     ))
 
     score_fig = px.line(last_song_u, x='logDate', y=last_song_u['Scores'].apply(np.mean),
         markers=True, 
         color='region',
-        template='plotly_white',
         labels={'y':'Mean score', 'logDate':'Date'}
     )
     if (not last_song_u.empty) and (not players_s.empty):
@@ -419,17 +419,17 @@ def update_graphs(region, start_dt, end_dt, mode, username):
     trend_score = dcc.Graph(figure=score_fig)
 
     X_u['Decade'] = X_u['AiredDate'].dt.year//10*10 
-    violin_graph = px.violin(X_u, x='Decade', y='p_correctGuess', template='plotly_white', box=True, labels=lbs, range_y=[0, 100])
+    violin_graph = px.violin(X_u, x='Decade', y='p_correctGuess', box=True, labels=lbs, range_y=[0, 100])
     if not players_s.empty:
         decade_p = X_u.groupby('Decade')['correct'].mean()*100
         violin_graph.add_trace(
             go.Scatter(x=decade_p.keys(), y=decade_p, mode='lines+markers', name=username)
         )
     decade_violin = dcc.Graph(figure=violin_graph)
-    date_hist = px.histogram(X_u, x='AiredDate', labels=lbs, template='plotly_white', color_discrete_sequence=['pink'], histnorm='percent')
+    date_hist = px.histogram(X_u, x='AiredDate', labels=lbs, color_discrete_sequence=['pink'], histnorm='percent')
 
     if not players_s.empty:
-        date_hist = px.histogram(X_u, x='AiredDate', labels=lbs, template='plotly_white', color_discrete_sequence=['pink', 'purple'],
+        date_hist = px.histogram(X_u, x='AiredDate', labels=lbs, color_discrete_sequence=['pink', 'purple'],
                                   histnorm='percent', color='correct', category_orders={'correct':[True, False]})
 
     date_hist.update_traces(marker_line_width=1, marker_line_color='white')
@@ -445,7 +445,6 @@ def update_graphs(region, start_dt, end_dt, mode, username):
             hover_data=hover_dt,
             labels=lbs,
             trendline=None,
-            template='plotly_white',
             range_x=[0, 100],
             range_y=[0, 100],
             opacity=0.5,
@@ -456,7 +455,7 @@ def update_graphs(region, start_dt, end_dt, mode, username):
         )
     else:
         d_c = px.scatter(X_u, x='difficulty', y='p_correctGuess', color='type_noNumber',
-                         marginal_x='histogram', marginal_y='histogram', hover_data=hover_dt_p, labels=lbs, template='plotly_white', range_x=[0, 100],
+                         marginal_x='histogram', marginal_y='histogram', hover_data=hover_dt_p, labels=lbs,  range_x=[0, 100],
                          range_y=[0, 100], opacity=0.5, category_orders={'type_noNumber':['Opening', 'Ending', 'Insert']}, render_mode='webgl',
                          symbol='correct')
     diff_correct = dcc.Graph(figure=d_c)
@@ -473,7 +472,7 @@ def update_graphs(region, start_dt, end_dt, mode, username):
         secondary_y=True,
     )
     genres_bar.update_traces(marker_color='rgb(78, 100, 207)', selector=dict(type='scatter'))
-    genres_bar.update_layout(template='plotly_white', yaxis=dict(
+    genres_bar.update_layout( yaxis=dict(
             title=dict(text='Appereance rate'),
             side='left',
             range=[0, 1],
@@ -483,7 +482,10 @@ def update_graphs(region, start_dt, end_dt, mode, username):
             side='right',
             range=[0, 100],
             overlaying='y',
-        ),)
+        ),
+        font={
+            'size':12
+        })
     genres_bar.update_xaxes(title_text='Genres')
 
     if not players_s.empty:
@@ -505,7 +507,7 @@ def update_graphs(region, start_dt, end_dt, mode, username):
         secondary_y=True,
     )
     tags_bar.update_traces(marker_color='rgb(78, 100, 207)', selector=dict(type='scatter'))
-    tags_bar.update_layout(template='plotly_white', yaxis=dict(
+    tags_bar.update_layout(yaxis=dict(
             title=dict(text='Appereance rate'),
             side='left',
             range=[0, 1],
@@ -515,7 +517,10 @@ def update_graphs(region, start_dt, end_dt, mode, username):
             side='right',
             range=[0, 100],
             overlaying='y',
-        ),)
+        ),
+        font={
+            'size':12
+        })
     tags_bar.update_xaxes(title_text='Tags')
 
     if not players_s.empty:
@@ -529,16 +534,30 @@ def update_graphs(region, start_dt, end_dt, mode, username):
 
 app.layout = dbc.Container(
     [
-        html.Div(children=[region_selector(), mode_selector()], style={
-            'display': 'inline-block',
-            'vertical-align': 'top',
-            'z-index':'10',
-            'margin-top':'10px'
-        }),
-        html.Div([
-            app_description(),
-            date_picker(),
+        dbc.Col(children=[
+            html.Br(),
             player_picker(),
+            html.Hr(),
+            html.P('Region', style={'margin-left':'3%'},),
+            html.Hr(),
+            region_selector(),
+            html.Hr(),
+            html.P('Mode', style={'margin-left':'3%'}),
+            html.Hr(),
+            mode_selector(),
+            html.Hr(),
+            html.P('Filter by date', style={'margin-left':'3%'}),
+            html.Hr(),
+            date_picker(),
+        ], style={
+            'position':'fixed',
+            'left':'0',
+            'width':'20%',
+            'height':'100%',
+            'background-color':'#B8B8B8'
+        }),
+        dbc.Col([
+            app_description(),
             generic_table(),
             types_table(),
             difficulty_correct_scatter(),
@@ -553,11 +572,8 @@ app.layout = dbc.Container(
             trend_score(),
             footnote()
         ], style={
-            'display': 'inline-block',
-            'vertical-align': 'top', 
-            'width':'90%',
+            'width':'80%',
             'float':'right',
-            'z-index':'0',
             'margin-top':'10px'
         })
     ]
