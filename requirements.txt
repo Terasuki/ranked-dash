@@ -6,3 +6,4 @@ numpy
 scipy
 gunicorn
 pyarrow
+dash_bootstrap_templates
