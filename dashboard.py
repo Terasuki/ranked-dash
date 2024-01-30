@@ -163,7 +163,7 @@ def date_picker():
         children=[dcc.DatePickerRange(
             id='date-picker',
             start_date=date(2023, 2, 12),
-            end_date=date(2023, 12, 31),
+            end_date=date(2024, 12, 31),
             min_date_allowed=date(2023, 2, 12),
             first_day_of_week=1,
             number_of_months_shown=3

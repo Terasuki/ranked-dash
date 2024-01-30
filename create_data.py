@@ -35,6 +35,9 @@ def load_data():
     novice = pd.concat(([central_novice, east_novice]), ignore_index=True)
     novice['rankedMode'] = 'Novice'
 
+    novice = novice.replace('Unrated', 0)
+    novice = novice.astype({'difficulty': 'float'})
+
     # Expert
     path_central_expert = './CentralR-E'
     all_files_central_expert = sorted(glob.glob(os.path.join(path_central_expert, "*.json")))
